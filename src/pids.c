@@ -43,8 +43,8 @@
 #define SIS_EA_LOCATION_FORMAT_ZIP  2
 
 
-static char *chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ?-*$ ";
-static int payload_sizes[] = {
+static const char *chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ?-*$ ";
+static const int payload_sizes[] = {
     32, 22, 58, 32, 27, 58, 27, 22,
     58, 58, 27, -1, -1, -1, -1, -1
 };
