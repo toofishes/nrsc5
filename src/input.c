@@ -31,7 +31,7 @@
  * Start of stop band: 530000
  * Stop band attenuation: 40
  */
-static float decim_taps[] = {
+static const float decim_taps[] = {
     0.6062333583831787,
     0,
     -0.13481467962265015,

@@ -25,7 +25,7 @@
 #define DECIMATION_FACTOR_FM 2
 #define DECIMATION_FACTOR_AM 32
 
-static float filter_taps_fm[] = {
+static const float filter_taps_fm[] = {
     -0.000685643230099231,
     0.005636964458972216,
     0.009015781804919243,
@@ -60,7 +60,7 @@ static float filter_taps_fm[] = {
     0
 };
 
-static float filter_taps_am[] = {
+static const float filter_taps_am[] = {
     -0.00038464731187559664,
     -0.00021618751634377986,
     0.0026779419276863337,
