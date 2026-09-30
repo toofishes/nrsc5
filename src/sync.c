@@ -102,10 +102,11 @@ static void adjust_ref(sync_t *st, unsigned int ref, int cfo)
 
     for (n = 0; n < BLKSZ; n++)
     {
-        float error = cargf(st->buffer[ref][n] * st->buffer[ref][n] * cexpf(-I * 2 * st->costas_phase[ref])) * 0.5f;
+        float complex rot = cexpf(-I * st->costas_phase[ref]);
+        float error = cargf(st->buffer[ref][n] * st->buffer[ref][n] * rot * rot) * 0.5f;
 
         st->phases[ref][n] = st->costas_phase[ref];
-        st->buffer[ref][n] *= cexpf(-I * st->costas_phase[ref]);
+        st->buffer[ref][n] *= rot;
 
         st->costas_freq[ref] += st->beta * error;
         if (st->costas_freq[ref] > 0.5f) st->costas_freq[ref] = 0.5f;
@@ -264,20 +265,56 @@ static float calc_smag(sync_t *st, unsigned int ref)
 
 static void adjust_data(sync_t *st, unsigned int lower, unsigned int upper)
 {
-    float smag0, smag19;
-    smag0 = calc_smag(st, lower);
-    smag19 = calc_smag(st, upper);
+    float smag0 = calc_smag(st, lower);
+    float smag19 = calc_smag(st, upper);
 
     for (int n = 0; n < BLKSZ; n++)
     {
-        float complex upper_phase = cexpf(st->phases[upper][n] * I);
-        float complex lower_phase = cexpf(st->phases[lower][n] * I);
+        float upper_phase = st->phases[upper][n];
+        float lower_phase = st->phases[lower][n];
+        float upper_cos = cosf(upper_phase);
+        float upper_sin = sinf(upper_phase);
+        float lower_cos = cosf(lower_phase);
+        float lower_sin = sinf(lower_phase);
+
+        /* cos of the phase difference between the two reference carriers */
+        float cos_diff = upper_cos * lower_cos + upper_sin * lower_sin;
+
+        /* Pre-compute (cos ± sin) for each reference.  These appear when
+         * dividing the constant numerator (PART + j PART) by a complex
+         * denominator (x + j y):
+         *
+         *   (PART + j PART) / (x + j y)
+         * = PART * ((x + y) + j (x - y)) / (x^2 + y^2)
+         */
+        float upper_c_plus_s  = upper_cos + upper_sin;
+        float upper_c_minus_s = upper_cos - upper_sin;
+        float lower_c_plus_s  = lower_cos + lower_sin;
+        float lower_c_minus_s = lower_cos - lower_sin;
 
         for (int k = 1; k < PARTITION_WIDTH_FM; k++)
         {
-            // average phase difference
-            float complex C = CMPLXF(PARTITION_WIDTH_FM, PARTITION_WIDTH_FM) / (k * smag19 * upper_phase + (PARTITION_WIDTH_FM - k) * smag0 * lower_phase);
-            // adjust sample
+            /* Linearly interpolate between the two reference magnitudes. */
+            float upper_weight = k * smag19;
+            float lower_weight = (PARTITION_WIDTH_FM - k) * smag0;
+
+            /* The denominator x^2 + y^2, where x + j y is the weighted sum
+             * of the two unit-magnitude reference phasors.  Because both
+             * phasors have magnitude 1, this simplifies to:
+             *   a^2 + b^2 + 2ab * cos(diff)
+             */
+            float denom = upper_weight * upper_weight
+                        + lower_weight * lower_weight
+                        + 2.0f * upper_weight * lower_weight * cos_diff;
+            float inv_denom = 1.0f / denom;
+
+            float num_real = upper_weight * upper_c_plus_s
+                           + lower_weight * lower_c_plus_s;
+            float num_imag = upper_weight * upper_c_minus_s
+                           + lower_weight * lower_c_minus_s;
+
+            float complex C = CMPLXF(PARTITION_WIDTH_FM * num_real * inv_denom,
+                                     PARTITION_WIDTH_FM * num_imag * inv_denom);
             st->buffer[lower + k][n] *= C;
         }
     }
